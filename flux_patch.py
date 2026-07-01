@@ -72,6 +72,7 @@ def patched_forward_orig(
         y: Tensor,
         guidance: Tensor = None,
         control=None,
+        timestep_zero_index=None,
         transformer_options={},
         attn_mask: Tensor = None,
 ) -> Tensor:
@@ -80,6 +81,12 @@ def patched_forward_orig(
     Supports:
     - Multiple chained Flux2Fun controlnets (hints are summed)
     - Reference latents (hints only applied to main image tokens)
+
+    `timestep_zero_index` is accepted to match ComfyUI core's current
+    forward_orig signature (comfy/ldm/flux/model.py forward() now passes it by
+    keyword). Core uses it only to drive the final-layer modulation_dims for
+    ref-latent (kontext-style) workflows; a Fun-ControlNet run never sets it, so
+    it is accepted for signature parity and left unused here.
     """
     from comfy.ldm.flux.layers import timestep_embedding
     
