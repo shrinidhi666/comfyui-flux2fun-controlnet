@@ -378,7 +378,34 @@ class ControlNetWrapper:
         class HooksContainer:
             hooks = []
         self.extra_hooks = HooksContainer()
-        
+
+        # ComfyUI core (comfy/controlnet.py ControlBase) sets multigpu_clones on
+        # every control object; the sampler reads it UNCONDITIONALLY, even on a
+        # single GPU (comfy/samplers.py pre_run: `x['control'].multigpu_clones.items()`
+        # and comfy/sampler_helpers.py). This wrapper does not inherit ControlBase,
+        # so without this the run fails with:
+        #   AttributeError: 'ControlNetWrapper' object has no attribute 'multigpu_clones'
+        # Keep the interface satisfied; on one device it stays an empty dict.
+        self.multigpu_clones = {}
+
+    def get_instance_for_device(self, device):
+        """Return the control instance for a given device (core multigpu API).
+        Single-device: no per-device clone exists, so fall back to self."""
+        return self.multigpu_clones.get(device, self)
+
+    def deepclone_multigpu(self, load_device, autoregister=False):
+        """Core multigpu API. This wrapper delegates the heavy model to the
+        Flux2Fun patch (transformer_options), so there is no per-device deep
+        clone to make; reuse self and register it so core's loop terminates."""
+        if autoregister:
+            self.multigpu_clones[load_device] = self
+        return self
+
+    def set_previous_controlnet(self, cnet):
+        """Core multigpu API (sampler_helpers relinks the per-device chain)."""
+        self.previous_controlnet = cnet
+        return self
+
     def pre_run(self, model, percent_to_timestep_function):
         if self.previous_controlnet:
             self.previous_controlnet.pre_run(model, percent_to_timestep_function)
