@@ -25,9 +25,14 @@ def convert_pe_to_diffusers(pe):
         pe = pe.squeeze(0).squeeze(0)
     
     if pe.dim() == 4:
-        seq_len = pe.shape[0]
-        cos = pe[:, :, 0, :].reshape(seq_len, -1)
-        sin = pe[:, :, 1, :].reshape(seq_len, -1)
+        # pe is [seq, d/2, 2, 2] rotation matrices [[cos, -sin], [sin, cos]].
+        # The diffusers-style apply_rotary_emb below expects pair-duplicated
+        # vectors (c0, c0, c1, c1, ...) / (s0, s0, s1, s1, ...); flattening the
+        # matrix rows instead yields (c, -s) / (s, c) interleaves, which makes
+        # every odd output component collapse to its even partner and breaks
+        # the control blocks' attention.
+        cos = pe[:, :, 0, 0].repeat_interleave(2, dim=-1)
+        sin = pe[:, :, 1, 0].repeat_interleave(2, dim=-1)
         return (cos, sin)
     
     return None
